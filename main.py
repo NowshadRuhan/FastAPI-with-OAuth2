@@ -2,6 +2,7 @@ from enum import unique
 from fastapi import FastAPI, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from tortoise.models import Model
+from passlib.hash import bcrypt
 from tortoise import fields
 from tortoise.contrib.fastapi import register_tortoise
 from tortoise.contrib.pydantic import pydantic_model_creator
@@ -19,6 +20,14 @@ class User(Model):
 
     def verify_password(self, password):
         return True
+
+User_Pydantic = pydantic_model_creator(User, name='User')
+UserIn_Pydantic = pydantic_model_creator(User, name='UserIn', exclude_readonly=True)
+
+@app.post('/users')
+async def create_user(user: UserIn_Pydantic):
+    user_obj = User(username=user.username, password_hash=bcrypt.hash(user.password_hash))
+
 
 register_tortoise(
     app,
