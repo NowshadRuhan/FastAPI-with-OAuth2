@@ -1,6 +1,6 @@
 import jwt
 from enum import unique
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from tortoise.models import Model
 from passlib.hash import bcrypt
@@ -17,9 +17,9 @@ class User(Model):
     username = fields.CharField(50, unique=True)
     password_hash = fields.CharField(255)
 
-    @classmethod
-    async def get_user(cls, username):
-        return cls.get(username=username)
+    # @classmethod
+    # async def get_user(cls, username):
+    #     return cls.get(username=username)
 
     def verify_password(self, password):
         return bcrypt.verify(password, self.password_hash)
@@ -44,7 +44,10 @@ async def generate_token(form_data: OAuth2PasswordRequestForm = Depends()):
     user = await authenticate_user(form_data.username, form_data.password)
 
     if not user: 
-        return {'error': 'invalid credentials'}
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail='Invalid username or password'
+        )
     
     user_obj = await User_Pydantic.from_tortoise_orm(user)
 
@@ -52,11 +55,28 @@ async def generate_token(form_data: OAuth2PasswordRequestForm = Depends()):
     return {'access_token': token, 'token_type': 'bearer'}
 
 
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        user = await User.get(id=payload.get('id'))
+    except:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail='Invalid username or password'
+        )
+
+    return await User_Pydantic.from_tortoise_orm(user)
+
 @app.post('/users')
 async def create_user(user: UserIn_Pydantic):
     user_obj = User(username=user.username, password_hash=bcrypt.hash(user.password_hash))
     await user_obj.save()
     return await User_Pydantic.from_tortoise_orm(user_obj)
+
+
+@app.get('/users/me', response_model=User_Pydantic)
+async def get_user(user: User_Pydantic = Depends(get_current_user)):
+    return user    
 
 
 register_tortoise(
