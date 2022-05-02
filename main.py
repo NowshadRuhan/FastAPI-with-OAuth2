@@ -50,6 +50,7 @@ async def generate_token(form_data: OAuth2PasswordRequestForm = Depends()):
         )
     
     user_obj = await User_Pydantic.from_tortoise_orm(user)
+    print(user_obj.id)
 
     token = jwt.encode(user_obj.dict(), JWT_SECRET)
     return {'access_token': token, 'token_type': 'bearer'}
